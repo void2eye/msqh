@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python文件IO游戏化学习</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Arial', sans-serif;
+        }
+        #gameCanvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        #codeSection {
+            display: none;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            background-color: #1E1E1E;
+            border-top: 3px solid #4CAF50;
+        }
+        /* 替换原来的 #codeEditor 样式 */
+        .CodeMirror {
+            width: 60% !important;
+            height: 100% !important;
+            float: left;
+            font-family: 'Consolas', monospace !important;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        /* 调整行号样式 */
+        .CodeMirror-gutters {
+            background-color: #1E1E1E !important;
+            border-right: 1px solid #333 !important;
+        }
+
+        /* 调整光标颜色 */
+        .CodeMirror-cursor {
+            border-left: 2px solid #4CAF50 !important;
+        }
+        #codeOutput {
+            width: 40%;
+            height: 100%;
+            float: right;
+            background-color: #0E0E0E;
+            color: #0F0;
+            font-family: 'Consolas', monospace;
+            font-size: 16px;
+            padding: 10px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            box-sizing: border-box;
+        }
+        #runButton {
+            position: absolute;
+            top: 10px;
+            right: 42%;
+            padding: 8px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            z-index: 10;
+        }
+        #checkButton {
+            display: none;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 8px 20px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            z-index: 10;
+        }
+        #checkButton:hover {
+            background-color: #45a049;
+        }
+        #inventoryPanel {
+            display: none;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(20, 20, 20, 0.8);
+            border: 2px solid #4CAF50;
+            border-radius: 5px;
+            color: #FFF;
+            padding: 10px;
+            width: 200px;
+        }
+        #inventoryPanel h3 {
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .inventoryItem {
+            margin: 5px 0;
+            padding: 5px;
+            background-color: rgba(76, 175, 80, 0.3);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="codeSection">
+    <div id="codeEditorContainer"></div> <!-- 替换原来的 textarea -->
+    <div id="codeOutput">/* 输出将显示在这里 */</div>
+    <button id="runButton">运行代码</button>
+    <button id="checkButton">提交任务</button>
+</div>
+<div id="inventoryPanel">
+    <h3>背包物品</h3>
+    <div id="inventoryItems"></div>
+</div>
+
+<!--<script src="https://cdnjs.cloudflare.com/ajax/libs/EaselJS/1.0.2/easeljs.min.js"></script>-->
+<!--<script src="https://cdnjs.cloudflare.com/ajax/libs/SoundJS/1.0.2/soundjs.min.js"></script>-->
+<!--<script src="https://code.createjs.com/1.0.0/createjs.min.js"></script>-->
+
+<!--<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">-->
+<!--<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>-->
+
+<!--<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/python/python.min.js"></script>-->
+
+<!--<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/material-ocean.min.css">-->
+
+<script src="libs/http_cdnjs.cloudflare.com_ajax_libs_EaselJS_1.0.2_easeljs.js"></script>
+<script src="libs/http_cdnjs.cloudflare.com_ajax_libs_SoundJS_1.0.2_soundjs.js"></script>
+<script src="libs/http_code.createjs.com_1.0.0_createjs.js"></script>
+<link rel="stylesheet" href="libs/http_cdnjs.cloudflare.com_ajax_libs_codemirror_5.65.5_codemirror.css">
+<script src="libs/http_cdnjs.cloudflare.com_ajax_libs_codemirror_5.65.5_codemirror.js"></script>
+<script src="libs/http_cdnjs.cloudflare.com_ajax_libs_codemirror_5.65.5_mode_python_python.js"></script>
+<link rel="stylesheet" href="libs/http_cdnjs.cloudflare.com_ajax_libs_codemirror_5.65.5_theme_material-ocean.css">
+
+<script>
+    // 游戏主要变量
+    let stage, player, treasureChest;
+    let currentScene = "intro"; // intro, game, chest
+    let gameWidth, gameHeight;
+    let playerSpeed = 5;
+    let keysPressed = {};
+    let playerInventory = [];
+    let introSlides = [];
+    let currentSlideIndex = 0;
+    let treasureOpened = false;
+    let playerDirection = "down"; // down, up, left, right
+    let playerSprites = {}; // 存储玩家不同方向的精灵
+
+    // 图片资源
+    const RESOURCES = {
+        player_front: "yz.png",
+        player_back: "yz_back.png",
+        player_left: "yz_left.png",
+        player_right: "yz_right.png",
+        background: "bg.png",
+        treasure: "treasure.png" // 触发事件的宝箱图
+    };
+
+    // 宝箱位置（这些值需要根据实际背景图调整）
+    const TREASURE_POSITION = {
+        x: 600, // 示例值，需要根据实际背景图调整
+        y: 150, // 示例值，需要根据实际背景图调整
+        width: 60,
+        height: 60
+    };
+
+    // 需要收集的宝物（对应不同的文件IO操作）
+    const treasureItems = [
+        { id: "read", name: "读取宝石", desc: "使用 with open() as 读取文件内容", collected: false },
+        { id: "write", name: "写入水晶", desc: "使用 with open() as 写入内容到文件", collected: false },
+        { id: "append", name: "追加卷轴", desc: "使用 with open() as 追加内容到文件", collected: false },
+        { id: "binary", name: "二进制钥匙", desc: "使用 with open() as 读取二进制文件", collected: false }
+    ];
+
+    // 代码验证规则
+    const codeValidationRules = {
+        "read": function(code) {
+            return code.includes("with open") &&
+                code.includes("'r'") &&
+                code.includes("as") &&
+                code.includes("read");
+        },
+        "write": function(code) {
+            return code.includes("with open") &&
+                code.includes("'w'") &&
+                code.includes("as") &&
+                code.includes("write");
+        },
+        "append": function(code) {
+            return code.includes("with open") &&
+                code.includes("'a'") &&
+                code.includes("as") &&
+                code.includes("write");
+        },
+        "binary": function(code) {
+            return code.includes("with open") &&
+                code.includes("'rb'") &&
+                code.includes("as");
+        }
+    };
+
+    let codeEditor;
+
+    function initCodeEditor() {
+        codeEditor = CodeMirror(document.getElementById("codeEditorContainer"), {
+            mode: "python",
+            theme: "material-ocean",
+            lineNumbers: true,
+            indentUnit: 4,
+            tabSize: 4,
+            smartIndent: true,
+            matchBrackets: true,
+            autofocus: true,
+            extraKeys: { "Tab": "indentMore" },
+            lineWrapping: true, // 代码折行
+            foldGutter: true, // 代码折叠
+            // gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"] // 边栏增
+        });
+
+        // 设置默认占位文本
+        codeEditor.setValue("# 在这里编写你的Python代码...\n");
+    }
+
+    // 初始化游戏
+    window.addEventListener('load', init);
+
+    function init() {
+        // 创建舞台
+        const canvas = document.getElementById("gameCanvas");
+        gameWidth = window.innerWidth;
+        gameHeight = window.innerHeight;
+        canvas.width = gameWidth;
+        canvas.height = gameHeight;
+
+        stage = new createjs.Stage(canvas);
+        createjs.Ticker.timingMode = createjs.Ticker.RAF;
+        createjs.Ticker.addEventListener("tick", tick);
+
+        // 预加载资源
+        loadResources();
+        initCodeEditor();
+    }
+
+    function loadResources() {
+        // 创建预加载器
+        const preload = new createjs.LoadQueue();
+        preload.on("complete", handleComplete);
+        preload.loadManifest([
+            {id: "player_front", src: RESOURCES.player_front},
+            {id: "player_back", src: RESOURCES.player_back},
+            {id: "player_left", src: RESOURCES.player_left},
+            {id: "player_right", src: RESOURCES.player_right},
+            {id: "background", src: RESOURCES.background},
+            {id: "treasure", src: RESOURCES.treasure}
+        ]);
+
+        function handleComplete() {
+            // 资源加载完成后初始化游戏
+            setupGame(preload);
+        }
+    }
+
+    function setupGame(preload) {
+        // 存储预加载器以便后续引用
+        window.gamePreload = preload;
+
+        // 存储玩家精灵
+        playerSprites = {
+            down: new createjs.Bitmap(preload.getResult("player_front")),
+            up: new createjs.Bitmap(preload.getResult("player_back")),
+            left: new createjs.Bitmap(preload.getResult("player_left")),
+            right: new createjs.Bitmap(preload.getResult("player_right"))
+        };
+
+        // 为每个精灵设置注册点（居中）
+        for (const direction in playerSprites) {
+            const sprite = playerSprites[direction];
+            sprite.image.onload = function() {
+                sprite.regX = sprite.image.width / 2;
+                sprite.regY = sprite.image.height / 2;
+                sprite.scaleX = sprite.scaleY = 0.5; // 可根据需要调整缩放
+            };
+        }
+
+        // 监听键盘事件
+        window.addEventListener("keydown", handleKeyDown);
+        window.addEventListener("keyup", handleKeyUp);
+
+        // 监听按钮点击
+        document.getElementById("checkButton").addEventListener("click", validateCode);
+        document.getElementById("runButton").addEventListener("click", runPythonCode);
+
+        // 创建介绍幻灯片
+        createIntroSlides();
+
+        // 开始游戏
+        showIntro();
+    }
+
+    function createIntroSlides() {
+
+
+        // 创建介绍故事的幻灯片
+        const slideTexts = [
+            "在Python的奇幻世界中...",
+            "文件IO是一项强大的魔法",
+            "你将扮演一位寻宝者",
+            "探索并掌握不同的文件操作方式",
+            "准备好了吗？点击屏幕开始冒险！"
+        ];
+
+        for (let i = 0; i < slideTexts.length; i++) {
+            const slide = new createjs.Container();
+
+            const bg = new createjs.Shape();
+            bg.graphics.beginFill("#000").drawRect(0, 0, gameWidth, gameHeight);
+
+            const text = new createjs.Text(slideTexts[i], "36px Arial", "#FFF");
+            text.x = gameWidth / 2;
+            text.y = gameHeight / 2;
+            text.textAlign = "center";
+            text.alpha = 0;
+
+            slide.addChild(bg, text);
+            introSlides.push(slide);
+
+            // 添加点击事件以前进到下一张幻灯片
+            slide.on("click", nextIntroSlide);
+
+        }
+    }
+
+    function showIntro() {
+
+        currentScene = "intro";
+        stage.removeAllChildren();
+
+        // 显示第一张幻灯片
+        stage.addChild(introSlides[0]);
+        createjs.Tween.get(introSlides[0].getChildAt(1))
+            .to({alpha: 1}, 1000);
+    }
+
+    function nextIntroSlide() {
+        if (currentSlideIndex < introSlides.length - 1) {
+            // 淡出当前幻灯片
+            createjs.Tween.get(introSlides[currentSlideIndex].getChildAt(1))
+                .to({alpha: 0}, 500)
+                .call(() => {
+                    // 切换到下一张
+                    currentSlideIndex++;
+                    stage.removeAllChildren();
+                    stage.addChild(introSlides[currentSlideIndex]);
+                    // 淡入新幻灯片
+                    createjs.Tween.get(introSlides[currentSlideIndex].getChildAt(1))
+                        .to({alpha: 1}, 500);
+                });
+        } else {
+            // 结束介绍，开始游戏
+            startGame();
+        }
+    }
+
+    function startGame() {
+        currentScene = "game";
+        stage.removeAllChildren();
+
+        // window.gamePreload = preload;
+        // playerSprites = {
+        //     down: new createjs.Bitmap(preload.getResult("player_front")),
+        //     up: new createjs.Bitmap(preload.getResult("player_back")),
+        //     left: new createjs.Bitmap(preload.getResult("player_left")),
+        //     right: new createjs.Bitmap(preload.getResult("player_right"))
+        // };
+        // // 立即为每个精灵设置注册点和缩放比例，不依赖于onload事件
+        // for (const direction in playerSprites) {
+        //     const sprite = playerSprites[direction];
+        //     // 如果图像已加载，立即设置
+        //     if (sprite.image && sprite.image.complete) {
+        //         sprite.regX = sprite.image.width / 2;
+        //         sprite.regY = sprite.image.height / 2;
+        //         sprite.scaleX = sprite.scaleY = 0.5; // 缩小一倍
+        //     } else {
+        //         // 如果图像尚未加载，等待加载完成
+        //         sprite.image.onload = function() {
+        //             sprite.regX = sprite.image.width / 2;
+        //             sprite.regY = sprite.image.height / 2;
+        //             sprite.scaleX = sprite.scaleY = 0.5; // 缩小一倍
+        //         };
+        //     }
+        // }
+
+        // 显示背包
+        document.getElementById("inventoryPanel").style.display = "block";
+        updateInventory();
+
+        // 创建游戏场景
+        createGameScene();
+    }
+
+    function createGameScene() {
+        // 清除舞台
+        stage.removeAllChildren();
+
+        // 添加背景
+        const background = new createjs.Bitmap(window.gamePreload.getResult("background"));
+        background.scaleX = gameWidth / background.image.width;
+        background.scaleY = gameHeight / background.image.height;
+        stage.addChild(background);
+
+        // 添加宝箱（宝箱应该在特定位置，这里直接用背景上的宝箱）
+        // 但我们需要添加一个碰撞区域来检测玩家是否接近宝箱
+        const treasureHitArea = new createjs.Shape();
+        treasureHitArea.graphics.beginFill("rgba(0,0,0,0.01)") // 几乎透明
+            .drawRect(TREASURE_POSITION.x - TREASURE_POSITION.width/2,
+                TREASURE_POSITION.y - TREASURE_POSITION.height/2,
+                TREASURE_POSITION.width,
+                TREASURE_POSITION.height);
+        treasureHitArea.alpha = 0.01; // 几乎不可见
+        treasureHitArea.on("click", function() {
+            // 检查玩家是否足够靠近
+            if (isPlayerNearTreasure()) {
+                openTreasureChest();
+            }
+        });
+        stage.addChild(treasureHitArea);
+
+        // 创建玩家角色
+        createPlayer();
+
+    }
+
+    function createPlayer() {
+        // 创建玩家角色容器
+        player = new createjs.Container();
+
+        // 检查玩家精灵是否已加载
+        if (playerSprites && playerSprites[playerDirection]) {
+            // 默认使用正面精灵
+            const currentSprite = playerSprites[playerDirection];
+            currentSprite.scaleX = currentSprite.scaleY = 0.5;
+            player.addChild(currentSprite);
+        } else {
+            // 使用简单的图形作为后备
+            const fallbackPlayer = new createjs.Shape();
+            fallbackPlayer.graphics.beginFill("#2196F3").drawCircle(0, 0, 10);
+
+            const face = new createjs.Shape();
+            // 缩小面部特征
+            face.graphics.beginFill("#FFF").drawCircle(2.5, -2.5, 2.5); // 原来是5, -5, 5
+            face.graphics.beginFill("#FFF").drawCircle(-2.5, -2.5, 2.5); // 原来是-5, -5, 5
+            face.graphics.beginFill("#000").drawCircle(2.5, -2.5, 1); // 原来是5, -5, 2
+            face.graphics.beginFill("#000").drawCircle(-2.5, -2.5, 1); // 原来是-5, -5, 2
+            face.graphics.beginFill("#000").drawRect(-3.5, 3.5, 7, 1); // 原来是-7, 7, 14, 2
+
+            player.addChild(fallbackPlayer, face);
+        }
+
+        // 设置初始位置（在屏幕底部中央）
+        player.x = gameWidth / 2;
+        player.y = gameHeight * 0.8;
+
+        stage.addChild(player);
+
+        // 确保玩家在其他元素上方
+        stage.setChildIndex(player, stage.children.length - 1);
+    }
+
+    function updatePlayerDirection(newDirection) {
+        if (playerDirection === newDirection || !player) return;
+
+        // 检查精灵是否存在
+        if (playerSprites && playerSprites[newDirection]) {
+            // 移除当前精灵
+            player.removeAllChildren();
+
+            // 添加新方向的精灵
+            playerDirection = newDirection;
+
+            const newSprite = playerSprites[newDirection];
+            newSprite.scaleX = newSprite.scaleY = 0.5;
+            player.addChild(playerSprites[playerDirection]);
+        } else {
+            // 如果精灵不存在，只更新方向但不改变图形
+            playerDirection = newDirection;
+        }
+    }
+
+    function isPlayerNearTreasure() {
+        if (!player) return false;
+
+        // 检查是否所有宝物都已收集
+        const allCollected = treasureItems.every(item => item.collected);
+        if (allCollected) {
+            return false; // 如果所有宝物都已收集，不再触发宝箱交互
+        }
+
+        // 检查玩家是否足够靠近宝箱
+        const dx = Math.abs(player.x - TREASURE_POSITION.x);
+        const dy = Math.abs(player.y - TREASURE_POSITION.y);
+        return dx < 80 && dy < 80; // 可根据实际游戏调整这个距离
+    }
+
+
+    function openTreasureChest() {
+        if (currentScene !== "game") return;
+
+        // 检查所有宝物是否已收集完毕
+        if (treasureItems.every(item => item.collected)) {
+            showVictoryMessage();
+            return;
+        }
+
+        // 设置当前场景
+        currentScene = "chest";
+
+        // 完全清除舞台
+        stage.removeAllChildren();
+
+        // 创建上半部分背景
+        const bg = new createjs.Shape();
+        bg.graphics.beginFill("#1A1A2E").drawRect(0, 0, gameWidth, gameHeight * 0.5);
+        stage.addChild(bg);
+
+        // 使用真实宝箱图片替代简单形状
+        const treasureImage = new createjs.Bitmap(window.gamePreload.getResult("treasure"));
+
+        // 调整宝箱尺寸和位置
+        const scale = 0.4;
+        treasureImage.scaleX = treasureImage.scaleY = scale;
+
+        // 设置宝箱的注册点为中心
+        treasureImage.regX = treasureImage.image.width / 2;
+        treasureImage.regY = treasureImage.image.height / 2;
+
+        // 放置在上半部分的中间
+        treasureImage.x = gameWidth / 2;
+        treasureImage.y = gameHeight * 0.25;
+
+        // 添加光晕效果
+        const glow = new createjs.Shape();
+        glow.graphics.beginFill("rgba(255, 215, 0, 0.3)").drawCircle(0, 0, 120);
+        glow.x = gameWidth / 2;
+        glow.y = gameHeight * 0.25;
+
+        // 添加闪光动画
+        createjs.Tween.get(glow, {loop: true})
+            .to({alpha: 0.2}, 1000)
+            .to({alpha: 0.5}, 1000);
+
+        // 先添加光晕，再添加宝箱
+        stage.addChild(glow, treasureImage);
+
+        // 显示代码编辑区域(位于下半部分)
+        document.getElementById("codeSection").style.display = "block";
+
+        // 重置按钮样式和位置，确保它们正确显示
+        resetButtonStyles();
+
+        // 获取未收集的宝物
+        const notCollectedItems = treasureItems.filter(item => !item.collected);
+
+        // 创建任务说明容器
+        const taskContainer = new createjs.Container();
+        taskContainer.name = "taskContainer";
+
+        if (notCollectedItems.length > 0) {
+            // 获取当前任务
+            const currentItem = notCollectedItems[0];
+
+            // 根据当前任务ID设置宝石颜色
+            let gemColor;
+            switch (currentItem.id) {
+                case "read": gemColor = "#3498db"; break; // 蓝色
+                case "write": gemColor = "#2ecc71"; break; // 绿色
+                case "append": gemColor = "#9b59b6"; break; // 紫色
+                case "binary": gemColor = "#f1c40f"; break; // 黄色
+                default: gemColor = "#ffffff"; // 默认白色
+            }
+
+            // 创建宝石并设置位置
+            const gem = new createjs.Shape();
+            const starSize = 30;
+            gem.graphics.beginFill(gemColor).drawPolyStar(0, 0, starSize, 5, 0.6, -90);
+            gem.x = gameWidth / 2;
+            gem.y = gameHeight * 0.1;
+
+            // 添加浮动动画
+            createjs.Tween.get(gem, {loop: true})
+                .to({y: gem.y - 10}, 1000, createjs.Ease.sineInOut)
+                .to({y: gem.y}, 1000, createjs.Ease.sineInOut);
+
+            // 添加闪烁动画
+            createjs.Tween.get(gem, {loop: true})
+                .to({alpha: 0.7}, 500)
+                .to({alpha: 1}, 500);
+
+            stage.addChild(gem);
+
+            // 创建任务标题文本
+            const taskTitle = new createjs.Text("当前任务：收集 " + currentItem.name, "bold 24px Arial", "#FFF");
+            taskTitle.x = gameWidth / 2;
+            taskTitle.y = gameHeight * 0.35;
+            taskTitle.textAlign = "center";
+            taskContainer.addChild(taskTitle);
+
+            // 创建任务描述文本
+            const taskDesc = new createjs.Text(currentItem.desc, "18px Arial", "#FFF");
+            taskDesc.x = gameWidth / 2;
+            taskDesc.y = gameHeight * 0.42;
+            taskDesc.textAlign = "center";
+            taskDesc.lineWidth = gameWidth * 0.8;
+            taskContainer.addChild(taskDesc);
+
+            // 添加任务容器到舞台
+            stage.addChild(taskContainer);
+
+            // 根据当前任务ID设置编辑器示例代码
+            let exampleCode = "";
+            switch (currentItem.id) {
+                case "read":
+                    exampleCode = "# 任务：读取文件内容\n# 使用with open以'r'模式打开文件\n\n# 示例：\n'''\nwith open('file.txt', 'r') as f:\n    content = f.read()\n    print(content)\n'''\n\n# 请在下面编写你的代码：\n\n";
+                    break;
+                case "write":
+                    exampleCode = "# 任务：写入内容到文件\n# 使用with open以'w'模式打开文件\n\n# 示例：\n'''\nwith open('file.txt', 'w') as f:\n    f.write('hello world')\n'''\n\n# 请在下面编写你的代码：\n\n";
+                    break;
+                case "append":
+                    exampleCode = "# 任务：追加内容到文件\n# 使用with open以'a'模式打开文件\n\n# 示例：\n'''\nwith open('file.txt', 'a') as f:\n    f.write('\\n这是追加的内容')\n'''\n\n# 请在下面编写你的代码：\n\n";
+                    break;
+                case "binary":
+                    exampleCode = "# 任务：读取二进制文件\n# 使用with open以'rb'模式打开文件\n\n# 示例：\n'''\nwith open('image.jpg', 'rb') as f:\n    binary_data = f.read()\n    print(len(binary_data), '字节')\n'''\n\n# 请在下面编写你的代码：\n\n";
+                    break;
+            }
+
+            // 设置编辑器内容和清空输出区域
+            codeEditor.setValue(exampleCode);
+            document.getElementById("codeOutput").innerHTML = "/* 运行结果将显示在这里 */";
+            styleCodeEditor();
+        } else {
+            // 所有宝物已收集完毕（理论上不应该执行到这里，因为前面已经检查）
+            const completeMsg = new createjs.Text("你已收集所有宝物！", "30px Arial", "#FFEB3B");
+            completeMsg.x = gameWidth / 2;
+            completeMsg.y = gameHeight * 0.35;
+            completeMsg.textAlign = "center";
+            stage.addChild(completeMsg);
+        }
+
+        // 添加返回按钮
+        const backButton = new createjs.Container();
+        backButton.name = "backButton";
+        backButton.cursor = "pointer";
+
+        const buttonBg = new createjs.Shape();
+        buttonBg.graphics.beginFill("#4CAF50").drawRoundRect(0, 0, 100, 40, 5);
+
+        const buttonText = new createjs.Text("返回", "20px Arial", "#FFF");
+        buttonText.x = 50;
+        buttonText.y = 20;
+        buttonText.textAlign = "center";
+        buttonText.textBaseline = "middle";
+
+        backButton.addChild(buttonBg, buttonText);
+        backButton.x = 20;
+        backButton.y = 20;
+        backButton.on("click", closeChestView);
+
+        stage.addChild(backButton);
+    }
+
+   // Create a custom syntax highlighting function
+    function highlightPythonCode(element, code) {
+        // If we're working with a textarea (the editor), we need a different approach
+        if (element.tagName.toLowerCase() === 'textarea') {
+            // For textarea, we can't apply direct HTML styling
+            // Instead, we'll create a styled overlay
+            styleCodeEditor();
+            return;
+        }
+
+        // For the output div, we can directly apply HTML styling
+        let highlightedCode = code;
+
+        // Replace keywords with styled spans
+        const keywords = ['def', 'if', 'else', 'elif', 'for', 'while', 'in', 'return',
+            'with', 'as', 'import', 'from', 'class', 'try', 'except', 'finally', 'print'];
+
+        // Create regex to match whole words only
+        keywords.forEach(keyword => {
+            const pattern = new RegExp(`\\b${keyword}\\b`, 'g');
+            highlightedCode = highlightedCode.replace(pattern,
+                `<span style="color: #569CD6; font-weight: bold;">${keyword}</span>`);
+        });
+
+        // Highlight strings (single quotes)
+        highlightedCode = highlightedCode.replace(/'([^']*)'/g,
+            '<span style="color: #CE9178;">\'$1\'</span>');
+
+        // Highlight strings (double quotes)
+        highlightedCode = highlightedCode.replace(/"([^"]*)"/g,
+            '<span style="color: #CE9178;">"$1"</span>');
+
+        // Highlight comments
+        highlightedCode = highlightedCode.replace(/(#.*)$/gm,
+            '<span style="color: #6A9955;">$1</span>');
+
+        // Highlight function calls
+        highlightedCode = highlightedCode.replace(/(\w+)(\()/g,
+            '<span style="color: #DCDCAA;">$1</span>$2');
+
+        // Set the highlighted HTML content
+        element.innerHTML = highlightedCode;
+    }
+
+    function styleCodeEditor() {
+        const codeEditor = document.getElementById("codeEditor");
+
+        // 应用自定义样式
+        codeEditor.style.fontFamily = "'Consolas', 'Monaco', monospace";
+        codeEditor.style.lineHeight = "1.5";
+        codeEditor.style.color = "#DCDCDC";
+        codeEditor.style.backgroundColor = "#1E1E1E";
+        codeEditor.style.tabSize = "4";
+    }
+
+
+    function runPythonCode() {
+        const code = codeEditor.getValue();
+        const outputElement = document.getElementById("codeOutput");
+
+        // 这里模拟Python代码的执行
+        // 在实际环境中，你需要集成一个Python解释器或连接到后端服务
+        // 这里我们使用一个简单的模拟来演示
+
+        let output = "";
+        try {
+            // 检测代码中是否有with open语句
+            if (code.includes("with open")) {
+                // 模拟文件操作结果
+                if (code.includes("'r'") || code.includes("'rt'") || code.includes("'tr'")) {
+                    output = "文件内容：\n这是从file.txt读取的内容。\n这是第二行。\n这是第三行。";
+                } else if (code.includes("'w'") || code.includes("'wt'") || code.includes("'tw'")) {
+                    output = "成功写入文件！";
+                } else if (code.includes("'a'") || code.includes("'at'") || code.includes("'ta'")) {
+                    output = "成功追加内容到文件！";
+                } else if (code.includes("'rb'") || code.includes("'br'")) {
+                    output = "读取二进制文件：\n字节数据: b'\\x89PNG\\r\\n\\x1a\\n...'\n总大小: 24156 字节";
+                } else {
+                    output = "文件操作成功完成。";
+                }
+            } else if (code.includes("print(")) {
+                // 简单模拟print函数
+                const printMatch = code.match(/print\((.*?)\)/g);
+                if (printMatch) {
+                    output = printMatch.map(p => {
+                        const content = p.substring(6, p.length - 1);
+                        return content.replace(/['"](.*)['"]/, '$1');
+                    }).join('\n');
+                }
+            } else {
+                output = "代码执行完毕，但没有输出。";
+            }
+        } catch (e) {
+            output = "错误: " + e.message;
+        }
+
+        highlightPythonCode(outputElement, output);
+    }
+
+    // 重构后的validateCode函数
+    function validateCode() {
+        // 获取代码内容
+        const code = codeEditor.getValue();
+
+        // 查找第一个未收集的宝物
+        const nextItem = treasureItems.find(item => !item.collected);
+
+        // 如果没有找到未收集的宝物，或者找不到验证规则，直接返回
+        if (!nextItem || !codeValidationRules[nextItem.id]) {
+            console.error("无法找到下一个任务或验证规则");
+            return;
+        }
+
+        // 运行验证规则检查代码正确性
+        const isValid = codeValidationRules[nextItem.id](code);
+
+        // 验证通过和未通过的处理逻辑分开
+        if (isValid) {
+            // ===== 验证通过的处理 =====
+
+            // 1. 设置物品为已收集
+            nextItem.collected = true;
+
+            // 2. 添加到背包（确保之前没有添加过）
+            if (!playerInventory.some(item => item.id === nextItem.id)) {
+                playerInventory.push(nextItem);
+            }
+
+            // 3. 更新背包UI
+            updateInventory();
+
+            // 4. 移除旧的任务与状态容器
+            clearTaskAndStatusContainers();
+
+            // 5. 创建成功消息容器
+            const successContainer = new createjs.Container();
+            successContainer.name = "successContainer";
+
+            // 成功消息文本
+            const successMsg = new createjs.Text("太棒了！你获得了" + nextItem.name, "bold 30px Arial", "#4CAF50");
+            successMsg.x = gameWidth / 2;
+            successMsg.y = gameHeight * 0.35;
+            successMsg.textAlign = "center";
+            successContainer.addChild(successMsg);
+
+            // 添加闪光效果
+            const successGlow = new createjs.Shape();
+            successGlow.graphics.beginFill("rgba(76, 175, 80, 0.3)").drawCircle(0, 0, 150);
+            successGlow.x = gameWidth / 2;
+            successGlow.y = gameHeight * 0.35;
+            successContainer.addChild(successGlow);
+
+            // 添加脉动动画
+            createjs.Tween.get(successGlow, {loop: true})
+                .to({scaleX: 1.2, scaleY: 1.2, alpha: 0.1}, 1000)
+                .to({scaleX: 1.0, scaleY: 1.0, alpha: 0.3}, 1000);
+
+            stage.addChild(successContainer);
+
+            // 6. 更新输出文本区域
+            document.getElementById("codeOutput").innerHTML =
+                "恭喜！你成功使用正确的文件IO操作获得了" + nextItem.name +
+                "！\n\n你可以在右上角的背包中查看已收集的宝物。";
+
+            // 7. 两秒后处理下一步
+            setTimeout(() => {
+                // 移除成功消息
+                if (successContainer.parent) {
+                    stage.removeChild(successContainer);
+                }
+
+                // 确保按钮样式正确
+                resetButtonStyles();
+
+                // 检查是否所有宝物都已收集
+                const allCollected = treasureItems.every(item => item.collected);
+
+                if (allCollected) {
+                    // 如果所有宝物都已收集，直接显示胜利信息
+                    showVictoryMessage();
+                } else {
+                    // 否则显示下一个任务
+                    resetButtonStyles();
+                    stage.removeAllChildren();
+                    currentScene = "game"; // 临时设置为game，确保openTreasureChest可以正常执行
+                    openTreasureChest(); // 重新显示下一个任务
+                }
+            }, 2000);
+        } else {
+            // ===== 验证失败的处理 =====
+
+            // 1. 更新输出区域显示错误信息
+            document.getElementById("codeOutput").innerHTML =
+                "代码似乎不符合要求，请确保使用了正确的with open语句和文件模式。" +
+                "\n\n提示：检查是否使用了正确的文件模式（'r', 'w', 'a', 'rb'等）和语法格式。";
+
+            // 2. 清除旧的错误消息（如果有）
+            const oldErrorMsg = stage.getChildByName("errorMsg");
+            if (oldErrorMsg && oldErrorMsg.parent) {
+                stage.removeChild(oldErrorMsg);
+            }
+
+            // 3. 添加新的错误消息
+            const errorMsg = new createjs.Text("代码不符合任务要求，请再试一次", "24px Arial", "#F44336");
+            errorMsg.name = "errorMsg";
+            errorMsg.x = gameWidth / 2;
+            errorMsg.y = gameHeight * 0.42;
+            errorMsg.textAlign = "center";
+            stage.addChild(errorMsg);
+
+            // 4. 添加抖动动画
+            createjs.Tween.get(errorMsg)
+                .to({x: gameWidth / 2 - 10}, 50)
+                .to({x: gameWidth / 2 + 10}, 50)
+                .to({x: gameWidth / 2 - 5}, 50)
+                .to({x: gameWidth / 2 + 5}, 50)
+                .to({x: gameWidth / 2}, 50);
+
+            // 5. 两秒后移除错误消息
+            setTimeout(() => {
+                if (errorMsg.parent) {
+                    stage.removeChild(errorMsg);
+                }
+            }, 2000);
+        }
+
+        // 确保舞台更新
+        stage.update();
+    }
+
+    // 辅助函数：清除任务和状态容器
+    function clearTaskAndStatusContainers() {
+        // 移除旧的任务容器
+        const oldTaskContainer = stage.getChildByName("taskContainer");
+        if (oldTaskContainer && oldTaskContainer.parent) {
+            stage.removeChild(oldTaskContainer);
+        }
+
+        // 移除旧的成功消息容器
+        const oldSuccessContainer = stage.getChildByName("successContainer");
+        if (oldSuccessContainer && oldSuccessContainer.parent) {
+            stage.removeChild(oldSuccessContainer);
+        }
+
+        // 移除旧的错误消息
+        const oldErrorMsg = stage.getChildByName("errorMsg");
+        if (oldErrorMsg && oldErrorMsg.parent) {
+            stage.removeChild(oldErrorMsg);
+        }
+    }
+
+    // 辅助函数：重置按钮样式
+    function resetButtonStyles() {
+        // 重置运行按钮样式
+        const runButton = document.getElementById("runButton");
+        if (runButton) {
+            runButton.style.display = "block";
+            runButton.style.right = "55%";  // 确保位置正确
+        }
+
+        // 重置检查按钮样式
+        const checkButton = document.getElementById("checkButton");
+        if (checkButton) {
+            checkButton.style.display = "block";
+            checkButton.style.right = "10px";  // 确保位置正确
+        }
+    }
+
+    function closeChestView() {
+        // 关闭宝箱视图，返回游戏场景
+        currentScene = "game";
+
+        // 隐藏代码编辑区
+        document.getElementById("codeSection").style.display = "none";
+        document.getElementById("checkButton").style.display = "none";
+        document.getElementById("runButton").style.display = "none";
+
+        // 清空代码区和输出区
+        document.getElementById("codeEditor").value = "";
+        document.getElementById("codeOutput").innerHTML = "/* 输出将显示在这里 */";
+
+        // 重新创建游戏场景
+        stage.removeAllChildren();
+        createGameScene();
+
+        // 如果所有宝物已收集，更新宝箱外观为打开状态
+        if (treasureOpened) {
+            const chest = treasureChest.getChildAt(0);
+            chest.graphics.clear()
+                .beginFill("#8B4513").drawRect(-30, -20, 60, 40)
+                .beginFill("#DAA520").drawRect(-25, -35, 50, 20);
+
+            // 添加闪光效果
+            const glow = new createjs.Shape();
+            glow.graphics.beginFill("#FFEB3B").drawCircle(0, -10, 15);
+            glow.alpha = 0.5;
+            treasureChest.addChild(glow);
+
+            createjs.Tween.get(glow, {loop: true})
+                .to({alpha: 0.2}, 800)
+                .to({alpha: 0.5}, 800);
+        }
+    }
+
+    // 修复updateInventory函数，防止重复添加物品
+    function updateInventory() {
+        const inventoryElement = document.getElementById("inventoryItems");
+
+        // 清空现有内容
+        inventoryElement.innerHTML = "";
+
+        // 检查背包是否为空
+        if (playerInventory.length === 0) {
+            inventoryElement.innerHTML = "<div class='inventoryItem'>背包空空如也</div>";
+        } else {
+            // 确保背包中没有重复物品
+            const uniqueInventory = [];
+            const idSet = new Set();
+
+            // 过滤重复项
+            playerInventory.forEach(item => {
+                if (!idSet.has(item.id)) {
+                    idSet.add(item.id);
+                    uniqueInventory.push(item);
+                }
+            });
+
+            // 更新playerInventory为去重后的数组
+            playerInventory = uniqueInventory;
+
+            // 显示背包物品
+            playerInventory.forEach(item => {
+                const itemElement = document.createElement("div");
+                itemElement.className = "inventoryItem";
+
+                // 根据物品ID添加颜色样式
+                let colorClass = "";
+                switch (item.id) {
+                    case "read": colorClass = "background-color: rgba(52, 152, 219, 0.3);"; break;
+                    case "write": colorClass = "background-color: rgba(46, 204, 113, 0.3);"; break;
+                    case "append": colorClass = "background-color: rgba(155, 89, 182, 0.3);"; break;
+                    case "binary": colorClass = "background-color: rgba(241, 196, 15, 0.3);"; break;
+                }
+
+                itemElement.setAttribute("style", colorClass);
+                itemElement.textContent = item.name;
+                inventoryElement.appendChild(itemElement);
+            });
+        }
+    }
+
+    // 改进胜利消息显示
+    function showVictoryMessage() {
+        // 显示胜利信息
+        currentScene = "victory";
+
+        document.getElementById("codeSection").style.display = "none";
+        document.getElementById("checkButton").style.display = "none";
+        document.getElementById("runButton").style.display = "none";
+
+        stage.removeAllChildren();
+
+        // 创建渐变背景
+        const bg = new createjs.Shape();
+        const gradient = bg.graphics.beginLinearGradientFill(
+            ["#1A1A2E", "#16213E", "#0F3460"],
+            [0, 0.5, 1],
+            0, 0,
+            0, gameHeight
+        ).drawRect(0, 0, gameWidth, gameHeight);
+        stage.addChild(bg);
+
+        // 添加粒子效果
+        for (let i = 0; i < 50; i++) {
+            createStar();
+        }
+
+        // 胜利标题（带光晕效果）
+        // const glowFilter = new createjs.BlurFilter(15, 15, 1);
+
+        const victoryTitle = new createjs.Text("恭喜你完成挑战！", "bold 40px Arial", "#FFEB3B");
+        victoryTitle.x = gameWidth / 2;
+        victoryTitle.y = gameHeight * 0.25;
+        victoryTitle.textAlign = "center";
+
+        const glowText = new createjs.Text("恭喜你完成挑战！", "bold 40px Arial", "rgba(255, 235, 59, 0.5)");
+        glowText.x = gameWidth / 2;
+        glowText.y = gameHeight * 0.25;
+        glowText.textAlign = "center";
+
+        // 使用更小的模糊值（从15减到5）
+        const glowFilter = new createjs.BlurFilter(5, 5, 1);
+        glowText.filters = [glowFilter];
+        glowText.cache(-200, -50, 400, 100); // 缓存滤镜处理后的文本
+
+
+
+        // 添加脉动动画
+        createjs.Tween.get(victoryTitle, {loop: true})
+            .to({scaleX: 1.1, scaleY: 1.1}, 1000, createjs.Ease.sineInOut)
+            .to({scaleX: 1.0, scaleY: 1.0}, 1000, createjs.Ease.sineInOut);
+
+        stage.addChild(glowText, victoryTitle);
+
+        const summaryText = new createjs.Text("你已经掌握了Python文件IO的基本用法：", "24px Arial", "#FFF");
+        summaryText.x = gameWidth / 2;
+        summaryText.y = gameHeight * 0.4;
+        summaryText.textAlign = "center";
+        stage.addChild(summaryText);
+
+        // 创建一个容器来盛放所有收集项
+        const itemsContainer = new createjs.Container();
+        itemsContainer.x = gameWidth / 2;
+        itemsContainer.y = gameHeight * 0.5;
+
+        // 列出所有学到的内容
+        let yPos = 0;
+        treasureItems.forEach((item, index) => {
+            // 为每个项目创建容器
+            const itemContainer = new createjs.Container();
+
+            // 根据项目ID设置颜色
+            let color;
+            switch (item.id) {
+                case "read": color = "#3498db"; break;
+                case "write": color = "#2ecc71"; break;
+                case "append": color = "#9b59b6"; break;
+                case "binary": color = "#f1c40f"; break;
+            }
+
+            // 创建小宝石图标
+            const gem = new createjs.Shape();
+            gem.graphics.beginFill(color).drawPolyStar(0, 0, 10, 5, 0.6, -90);
+            gem.x = -150;
+
+            // 项目文本
+            const itemText = new createjs.Text("• " + item.desc, "20px Arial", "#FFF");
+            itemText.x = -130;
+            itemText.y = -10;
+            itemText.textAlign = "left";
+
+            itemContainer.addChild(gem, itemText);
+            itemContainer.y = yPos;
+
+            // 添加延迟出现的动画效果
+            itemContainer.alpha = 0;
+            itemContainer.x = -50;  // 从左侧开始
+
+            createjs.Tween.get(itemContainer)
+                .wait(index * 300)  // 每个项目延迟出现
+                .to({alpha: 1, x: 0}, 500, createjs.Ease.backOut);
+
+            itemsContainer.addChild(itemContainer);
+            yPos += 40;  // 增加间距
+        });
+
+        stage.addChild(itemsContainer);
+
+        // 添加重新开始按钮
+        const restartButton = new createjs.Container();
+        restartButton.name = "restartButton";
+        restartButton.cursor = "pointer";
+
+        const buttonBg = new createjs.Shape();
+        buttonBg.graphics
+            .beginFill("#4CAF50")
+            .drawRoundRect(0, 0, 200, 50, 10);
+
+        const buttonText = new createjs.Text("重新开始", "24px Arial", "#FFF");
+        buttonText.x = 100;
+        buttonText.y = 25;
+        buttonText.textAlign = "center";
+        buttonText.textBaseline = "middle";
+
+        restartButton.addChild(buttonBg, buttonText);
+        restartButton.x = gameWidth / 2 - 100;
+        restartButton.y = gameHeight * 0.75;
+        restartButton.alpha = 0;
+
+        // 按钮出现的动画
+        createjs.Tween.get(restartButton)
+            .wait(treasureItems.length * 300 + 500)  // 等待所有项目出现后
+            .to({alpha: 1}, 500)
+            .call(() => {
+                // 添加悬停效果
+                restartButton.on("mouseover", function() {
+                    createjs.Tween.get(buttonBg, {override:true})
+                        .to({scaleX: 1.05, scaleY: 1.05}, 200);
+                    createjs.Tween.get(buttonText, {override:true})
+                        .to({scaleX: 1.05, scaleY: 1.05}, 200);
+                });
+
+                restartButton.on("mouseout", function() {
+                    createjs.Tween.get(buttonBg, {override:true})
+                        .to({scaleX: 1, scaleY: 1}, 200);
+                    createjs.Tween.get(buttonText, {override:true})
+                        .to({scaleX: 1, scaleY: 1}, 200);
+                });
+            });
+
+        restartButton.on("click", resetGame);
+        stage.addChild(restartButton);
+
+        // 创建星星粒子
+        function createStar() {
+            const star = new createjs.Shape();
+            const size = Math.random() * 3 + 1;
+            const color = createjs.Graphics.getRGB(
+                255,
+                200 + Math.random() * 55,
+                100 + Math.random() * 155,
+                Math.random() * 0.5 + 0.5
+            );
+
+            star.graphics.beginFill(color).drawPolyStar(0, 0, size, 5, 0.5, 0);
+            star.x = Math.random() * gameWidth;
+            star.y = Math.random() * gameHeight;
+
+            // 随机设置初始透明度
+            star.alpha = Math.random() * 0.5 + 0.5;
+
+            // 添加闪烁动画
+            const duration = Math.random() * 2000 + 1000;
+            createjs.Tween.get(star, {loop: true})
+                .to({alpha: Math.random() * 0.3 + 0.2}, duration)
+                .to({alpha: Math.random() * 0.5 + 0.5}, duration);
+
+            // 缓慢移动
+            createjs.Tween.get(star, {loop: true})
+                .to({y: star.y + Math.random() * 100 - 50}, 5000 + Math.random() * 5000)
+                .to({y: star.y}, 5000 + Math.random() * 5000);
+
+            stage.addChild(star);
+        }
+    }
+
+    // 在全局变量部分添加
+    let isFirstLaunch = true; // 用于跟踪是否是首次启动游戏
+
+    // 修改resetGame函数
+    function resetGame() {
+        // 重置游戏状态
+        playerInventory = [];
+        treasureItems.forEach(item => item.collected = false);
+        treasureOpened = false;
+
+        // 更新背包
+        updateInventory();
+
+        // 不再回到介绍幻灯片，直接开始游戏
+        if (isFirstLaunch) {
+            // 首次启动时显示介绍幻灯片
+            isFirstLaunch = false;
+            currentSlideIndex = 0;
+            showIntro();
+        } else {
+            // 非首次启动直接进入游戏
+            startGame();
+        }
+        treasureOpened = false; // 确保重置宝箱开启状态
+        document.getElementById("codeSection").style.display = "none"; // 新增
+    }
+
+    function handleKeyDown(event) {
+        if (currentScene !== "game") return;
+
+        keysPressed[event.key] = true;
+    }
+
+    function handleKeyUp(event) {
+        if (currentScene !== "game") return;
+
+        keysPressed[event.key] = false;
+    }
+
+    function movePlayer() {
+        if (currentScene !== "game" || !player) return;
+
+        let dx = 0;
+        let dy = 0;
+
+        // 使用WASD或箭头键移动
+        if (keysPressed["ArrowUp"] || keysPressed["w"] || keysPressed["W"]) {
+            dy = -playerSpeed;
+            updatePlayerDirection("up");
+        }
+        if (keysPressed["ArrowDown"] || keysPressed["s"] || keysPressed["S"]) {
+            dy = playerSpeed;
+            updatePlayerDirection("down");
+        }
+        if (keysPressed["ArrowLeft"] || keysPressed["a"] || keysPressed["A"]) {
+            dx = -playerSpeed;
+            updatePlayerDirection("left");
+        }
+        if (keysPressed["ArrowRight"] || keysPressed["d"] || keysPressed["D"]) {
+            dx = playerSpeed;
+            updatePlayerDirection("right");
+        }
+
+        // 应用移动
+        const newX = player.x + dx;
+        const newY = player.y + dy;
+
+        // 边界检查
+        if (newX >= 20 && newX <= gameWidth - 20) {
+            player.x = newX;
+        }
+        if (newY >= 20 && newY <= gameHeight - 20) {
+            player.y = newY;
+        }
+
+        // 检测与宝箱的接近度
+        if (isPlayerNearTreasure()) {
+            // 显示提示
+            const interactPrompt = new createjs.Text("按空格键或点击宝箱互动", "18px Arial", "#FFF");
+            interactPrompt.x = TREASURE_POSITION.x;
+            interactPrompt.y = TREASURE_POSITION.y - 50;
+            interactPrompt.textAlign = "center";
+            interactPrompt.shadow = new createjs.Shadow("#000", 2, 2, 3);
+            interactPrompt.name = "interactPrompt";
+
+            // 如果提示不存在，则添加
+            if (!stage.getChildByName("interactPrompt")) {
+                stage.addChild(interactPrompt);
+            }
+
+            // 如果按下空格键，触发宝箱交互
+            if (keysPressed[" "]) {
+                openTreasureChest();
+                keysPressed[" "] = false; // 防止连续触发
+            }
+        } else {
+            // 如果离开宝箱，移除提示
+            const prompt = stage.getChildByName("interactPrompt");
+            if (prompt) {
+                stage.removeChild(prompt);
+            }
+        }
+    }
+
+    function tick(event) {
+        // 更新游戏
+        movePlayer();
+
+        // 更新舞台
+        stage.update(event);
+    }
+
+    // 简化的错误处理函数
+    function handleError(error) {
+        console.error("游戏错误:", error);
+
+        // 显示错误消息到舞台
+        const errorText = new createjs.Text("出现错误，正在尝试恢复...", "20px Arial", "#FF0000");
+        errorText.x = gameWidth / 2;
+        errorText.y = gameHeight / 2;
+        errorText.textAlign = "center";
+        stage.addChild(errorText);
+        stage.update();
+
+        // 尝试恢复到介绍场景
+        setTimeout(function() {
+            currentScene = "intro";
+            currentSlideIndex = 0;
+            showIntro();
+        }, 2000);
+    }
+    // // 在游戏初始化时添加代码编辑器样式
+    // window.addEventListener('load', function() {
+    //     init();
+    //     styleCodeEditor();
+    // });
+
+    // 监听窗口大小变化
+    window.addEventListener('resize', function() {
+        gameWidth = window.innerWidth;
+        gameHeight = window.innerHeight;
+
+        const canvas = document.getElementById("gameCanvas");
+        canvas.width = gameWidth;
+        canvas.height = gameHeight;
+        if (codeEditor) {
+            codeEditor.refresh();
+        }
+
+        // 重建当前场景
+        if (currentScene === "intro") {
+            showIntro();
+        } else if (currentScene === "game") {
+            createGameScene();
+        } else if (currentScene === "chest") {
+            openTreasureChest();
+        } else if (currentScene === "victory") {
+            showVictoryMessage();
+        }
+    });
+</script>
+</body>
+</html>
